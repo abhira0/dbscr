@@ -134,3 +134,89 @@ class Downloader(BaseDownloader):
             printInfo("!", "red", CA, *tmp_s)
         else:
             self._downloadAll(verbose=False)
+
+
+class IDMRedirect(BaseDownloader):
+    def __init__(
+        self,
+        download_path: str,
+        verbose: Optional[str] = "min",
+    ):
+        start_time = time()
+        if verbose == "info":
+            aprint("\n>>>", CA, "Redirector\n", CB)
+        tmp_s = ["Redirector", CC, "for", CN, ROOT_URL, CU, "has been instantiated", CN]
+        printInfo(*TMP_I, *tmp_s)
+
+        self.download_path = download_path
+        ultimatum_path = f"{download_path}\\{BASE_U_PATH}"
+        super().__init__(ultimatum_path, 10)
+        self.lines: List[str] = []
+        self.total_videos = self.getTotalVideosCount()
+        self.download()
+
+        if verbose == "info":
+            aprint("\n>>>", CA, "Redirector-End\n", CB)
+        tmp_s = ["Time taken for", CN, "Redirector", CC, "class to complete is", CN]
+        time_taken = round(time() - start_time, 6)
+        printInfo(*TMP_I, *tmp_s, time_taken, CT, "seconds", CN)
+
+    def download(self):
+        self.redirectAll()
+        self.saveUltimatum()
+        self.saveBatchFile()
+        deleteLines(2)
+        printInfo(*TMP_I, ".bat file has been saved", CN)
+
+    def redirectAll(self, verbose: bool = True):
+        aprint("\n")
+        db_root = f"{self.download_path}\\{BASE_D_PATH}"
+        UTL.os.makedirs(db_root)
+
+        for s_name, section in self.ultimatum.items():
+            s_path = f"{db_root}\\{s_name}"  # section path
+            UTL.os.makedir(s_path)
+            for c_name, chapter in section["chapters"].items():
+                path_ = f"{s_path}\\{c_name}"
+                UTL.os.makedir(path_)
+                for l_url, lecture in chapter.items():
+                    f_name = lecture["name"] + ".mp4"  # filename
+                    f_name = f_name.replace(":", "_")
+                    line = f'"{IDM_PATH}" /n /d "{l_url}" /f "{f_name}" /p "{path_}"'
+                    self.lines.append(line)
+
+    def saveBatchFile(self):
+        with open(f"{self.download_path}\{BATCH_PATH}", "w") as f:
+            f.write("\n".join(i for i in self.lines))
+
+    def getTotalVideosCount(self):
+        c = 0
+        for s_name, section in self.ultimatum.items():
+            for c_name, chapter in section["chapters"].items():
+                c += len(chapter)
+        return c
+
+    def get_downloaded_lecture_count(self):
+        c = 0
+        for s_name, section in self.ultimatum.items():
+            for c_name, chapter in section["chapters"].items():
+                for l_url, lecture in chapter.items():
+                    c += lecture.get("dl", False)
+        return c
+
+    def refreshDownloads(self):
+        for s_name, section in self.ultimatum.items():
+            for c_name, chapter in section["chapters"].items():
+                for l_url, lecture in chapter.items():
+                    pointer = self.ultimatum[s_name]["chapters"][c_name][l_url]
+                    pointer["dl"] = False
+
+        self.saveUltimatum()
+        printInfo(*TMP_I, "All downloaded status got flushed in the json file", CN)
+
+    def resumeDownloads(self):
+        if self.ultimatum == {}:
+            tmp_s = ["There are no data to download, please harvest links", CE]
+            printInfo("!", "red", CA, *tmp_s)
+        else:
+            self.redirectAll(verbose=False)
