@@ -1,4 +1,3 @@
-from copy import deepcopy
 from threading import BoundedSemaphore, Thread
 from time import time
 from typing import List, Optional
@@ -73,29 +72,31 @@ class Downloader(BaseDownloader):
                 UTL.os.makedir(path_)
                 for l_url, lecture in chapter.items():
                     sema4.acquire()
+                    url = lecture["url"]
                     f_name = lecture["name"] + ".mp4"  # filename
                     f_name = f_name.replace(":", "_")
-                    args = [l_url, path_, f_name, s_name, c_name, sema4]
+                    args = [url, path_, f_name, s_name, c_name, l_url, sema4]
                     UTL.threading.createThread(self.downloadAVideo, args, thr)
         UTL.threading.joinThreads(thr)
 
     def downloadAVideo(
         self,
-        l_url: str,
+        url: str,
         dir_: str,
         name: str,
         s_name: str,
         c_name: str,
+        l_url: str,
         sema4: BoundedSemaphore,
     ):
         pointer = self.ultimatum[s_name]["chapters"][c_name][l_url]
         if pointer.get("dl", False) == True:
             ...
         else:
-            self.downloadAMedia(l_url, dir_, name, verbose=False, header=self.header)
+            self.downloadAMedia(url, dir_, name, verbose=False)
             pointer["dl"] = True
             deleteLines(2)
-            aprint("✅ Downloaded video from", CS, l_url, CU)
+            aprint("✅ Downloaded video from", CS, url, CU)
             tot = self.total_videos
             fin = self.get_downloaded_lecture_count()
             tmp_s = [*TMP_I, fin, CT, "out of", CN, tot, CT]
