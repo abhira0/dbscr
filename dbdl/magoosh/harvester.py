@@ -106,7 +106,7 @@ class Harvester(BaseHarvester):
         try:
             l_poi = self.ultimatum[s_name]["chapters"][c_name][l_url]
             l_poi["url"] = l_poi.get("url", None)
-            if l_poi == None:
+            if l_poi["url"] == None:
                 cssSel = "html > body > div > div > div > div > div"
                 x = UTL.requests.sourceCode(l_url, cssSel, cookies=self.cookies)
                 x = x[0]["data-react-props"]
