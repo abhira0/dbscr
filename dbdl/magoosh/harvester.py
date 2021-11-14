@@ -37,10 +37,9 @@ class Harvester(BaseHarvester):
 
     def harvest(self):
         self.setCookies()
-        # self.sectionIter()
+        self.sectionIter()
         self.lectureIter()
         self.saveUltimatum()
-        # self.saveErrorLog()
 
     def setCookies(self):
         c_text = COOKIES.split(";")
@@ -51,7 +50,7 @@ class Harvester(BaseHarvester):
 
     def sectionIter(self):
         sections_css = "html > body > div > div > div > div > a"
-        printInfo(*TMP_I, "Getting Metadata from the site", CN)
+        printInfo(*TMP_I, "Getting Metadata of sections from the site", CN)
         sections = UTL.requests.sourceCode(BASE_URL, sections_css)
         for i in sections:
             s_name = i.getText()
@@ -89,34 +88,48 @@ class Harvester(BaseHarvester):
                         tmp = c_poi[chap_name].get(lec_url, {"name": lec_name})
                         c_poi[chap_name][lec_url] = tmp
 
-    def lectureIter(self, page_urls: List[str]):
-        # Iterating through all the pages
+    def lectureIter(self):
         thr: List[Thread] = []
+        printInfo(*TMP_I, "Getting Metadata of all the lectures", CN)
         sema4 = BoundedSemaphore(CONF["thread"]["lecture"])
-        for url in page_urls:
-            sema4.acquire()
-            UTL.threading.createThread(self.getLectureInfo, [url, sema4], thr)
-        UTL.threading.joinThreads(thr)  # Waiting for threads to terminate
+        for s_name, section in self.ultimatum.items():
+            for c_name, chapters in section["chapters"].items():
+                for l_url in chapters:
+                    sema4.acquire()
+                    args = [l_url, s_name, c_name, sema4]
+                    UTL.threading.createThread(self.getLectureInfo, args, thr)
+        UTL.threading.joinThreads(thr)
+        tmp_s = ["Completed Harvesting of all lectures", CN]
+        printInfo(*TMP_I, *tmp_s)
 
-    def getLectureInfo(self, page_url: str, sema4: BoundedSemaphore):
-        # Below selector selects the heading containing the title and link for models in a page
-        cssSelector = "html > body > div > div > div > div > div > div > div > div > a"
-        models_obj = UTL.requests.sourceCode(page_url, cssSelector)
-        for model_obj in models_obj:
-            href = ROOT_URL + model_obj["href"][1:]
-            title = model_obj.select_one("img")["alt"]
-            self.ultimatum[href] = self.ultimatum.get(href, {"title": title})
-        sema4.release()
+    def getLectureInfo(self, l_url, s_name, c_name, sema4: BoundedSemaphore):
+        try:
+            l_poi = self.ultimatum[s_name]["chapters"][c_name][l_url]
+            l_poi["url"] = l_poi.get("url", None)
+            if l_poi == None:
+                cssSel = "html > body > div > div > div > div > div"
+                x = UTL.requests.sourceCode(l_url, cssSel, cookies=self.cookies)
+                x = x[0]["data-react-props"]
+                x = json.loads(x)
+                st_url = m_url = None
+                for i in x["options"]["sources"]:
+                    if i["type"] == "video/mp4":
+                        m_url = i["src"]
+                if m_url == None:
+                    for i in x["options"]["sources"]:
+                        if i["type"] == "video/webm":
+                            m_url = i["src"]
+                for i in x["options"]["tracks"]:
+                    if i["label"] == "English":
+                        st_url = i["src"]
 
-    def _get_harvested_album_count(self):
-        c = 0
-        for model_url in deepcopy(self.ultimatum):
-            media_links = self.ultimatum[model_url].get("media_links", [])
-            if media_links:
-                c += 1
-        return c
+                l_poi["url"] = m_url
+                l_poi["subtitle"] = st_url
+                tmp_s = ["Fetched url from:", CN, l_url, CT]
+            else:
+                tmp_s = ["Existing url from:", CW, l_url, CT]
+        except Exception as e:
+            printInfo(*TMP_E, e, CE, "for url:", CN, l_url, CU)
 
-    def saveErrorLog(self):
-        d = {"harvest_urls": self.error_list}
-        with open(f"{self.download_path}\\{BASE_L_PATH}", "w") as f:
-            json.dump(d, f, indent=4)
+        printInfo(*TMP_I, *tmp_s, same_line=True)
+        sema4.release() if sema4 else None
