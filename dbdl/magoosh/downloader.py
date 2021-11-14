@@ -64,17 +64,18 @@ class Downloader(BaseDownloader):
         db_root = f"{self.download_path}\\{BASE_D_PATH}"
         UTL.os.makedirs(db_root)
 
-        for s_name, section in self.ultimatum.items():
-            s_path = f"{db_root}\\{s_name}"  # section path
+        for s_no, (s_name, section) in enumerate(self.ultimatum.items()):
+            s_path = f"{db_root}\\{s_no+1} ~ {s_name}"  # section path
             UTL.os.makedir(s_path)
-            for c_name, chapter in section["chapters"].items():
-                path_ = f"{s_path}\\{c_name}"
+            for c_no, (c_name, chapter) in enumerate(section["chapters"].items()):
+                path_ = f"{s_path}\\{c_no+1} ~ {c_name}"
                 UTL.os.makedir(path_)
-                for l_url, lecture in chapter.items():
+                for f_no, (l_url, lecture) in enumerate(chapter.items()):
                     sema4.acquire()
                     url = lecture["url"]
-                    f_name = lecture["name"] + ".mp4"  # filename
-                    f_name = f_name.replace(":", "_")
+                    f_name = lecture["name"].replace(":", "_")  # filename
+                    f_name = f"{f_no+1} ~ {f_name}.mp4"
+                    f_name = UTL.os.cleanPathName(f_name)
                     args = [url, path_, f_name, s_name, c_name, l_url, sema4]
                     UTL.threading.createThread(self.downloadAVideo, args, thr)
         UTL.threading.joinThreads(thr)
@@ -93,8 +94,8 @@ class Downloader(BaseDownloader):
         if pointer.get("dl", False) == True:
             ...
         else:
-            self.downloadAMedia(url, dir_, name, verbose=False)
-            pointer["dl"] = True
+            if self.downloadAMedia(url, dir_, name, verbose=False):
+                pointer["dl"] = True
             deleteLines(2)
             aprint("✅ Downloaded video from", CS, url, CU)
             tot = self.total_videos
