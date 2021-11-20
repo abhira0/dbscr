@@ -21,7 +21,7 @@ class Harvester(BaseHarvester):
         start_time = time()
         if verbose == "info":
             aprint("\n>>>", CA, "Harvester\n", CB)
-        tmp_s = ["Harvester", CC, "for", CN, f"{ROOT_URL}/r/{sub_name}", CU]
+        tmp_s = ["Harvester", CC, "for", CN, f"{ROOT_URL}r/{sub_name}", CU]
         tmp_s += ["has been instantiated", CN]
         printInfo(*TMP_I, *tmp_s)
 
@@ -44,6 +44,7 @@ class Harvester(BaseHarvester):
         tmp_s = ["Time taken for", CN, "Harvester", CC, "class to complete is", CN]
         time_taken = round(time() - start_time, 6)
         printInfo(*TMP_I, *tmp_s, time_taken, CT, "seconds", CN)
+        self.quitSaver()
 
     def harvest(self):
         tmp_s = ["Started collection of all the medias for:", CN, self.sub_name, CT]
@@ -70,7 +71,7 @@ class Harvester(BaseHarvester):
         new_entity = 0
         for child in children_items:
             albumUrl, url = child["albumUrl"], child["url"]
-            title = UTL.cleanPathName(child["title"])
+            title = UTL.os.cleanPathName(child["title"])
             if albumUrl and (albumUrl not in self.ultimatum["albums"].keys()):
                 tmp_dict = {"title": title, "mediaUrls": [], "downloaded": []}
                 self.ultimatum["albums"][albumUrl] = tmp_dict
