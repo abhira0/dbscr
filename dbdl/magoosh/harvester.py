@@ -36,17 +36,23 @@ class Harvester(BaseHarvester):
         printInfo(*TMP_I, *tmp_s, time_taken, CT, "seconds", CN)
 
     def harvest(self):
-        self.setCookies()
+        if not self.setCookies():
+            return False
         self.sectionIter()
         self.lectureIter()
         self.saveUltimatum()
 
-    def setCookies(self):
+    def setCookies(self) -> bool:
+        if COOKIES == "":
+            printInfo(*TMP_E, "Please add user-cookie inside constants.py", CE)
+            return False
+
         c_text = COOKIES.split(";")
         self.cookies = {}
         for i in c_text:
             a, b = map(lambda x: x.strip(), i.split("="))
             self.cookies[a] = b
+        return True
 
     def sectionIter(self):
         sections_css = "html > body > div > div > div > div > a"
