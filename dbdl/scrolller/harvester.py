@@ -49,11 +49,21 @@ class Harvester(BaseHarvester):
     def harvest(self):
         tmp_s = ["Started collection of all the medias for:", CN, self.sub_name, CT]
         printInfo(*TMP_I, *tmp_s)
+        if not self.checkForSubreddit():
+            return
         self.threadSubreddit()
         self.threadSubreddit()
         self.threadAlbums()
         self.printVerbose(3)
         self.saveUltimatum()
+
+    def checkForSubreddit(self) -> bool:
+        try:
+            self.querySubreddit()
+            return True
+        except:
+            printInfo(*TMP_E, "Given subreddit does not exist!", CE)
+            return False
 
     def threadSubreddit(self) -> None:
         self.stop_quering = max(CONF["reset"]["query"], len(self.ultimatum["medias"]))
