@@ -4,8 +4,11 @@ import os
 
 
 class Dupy:
-    def __init__(self, download_path) -> None:
-        self.download_path = f"{download_path}\\{BASE_PATH}"
+    def __init__(self, download_path, relative: bool = False) -> None:
+        if relative:
+            self.download_path = f"{download_path}\\{BASE_PATH}"
+        else:
+            self.download_path = download_path
         self.du = DUPY(self.download_path)
         self.printCount()
         self.main()

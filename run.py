@@ -4,7 +4,7 @@ from dbdl.magoosh.constants import CW, TMP_I
 from dbdl.scrolller import SLR_D, SLR_H, SLR_DUPY
 import argparse
 
-DOWNLOAD_PATH = "F:\scr"
+DOWNLOAD_PATH = "F:\Downloads\src"
 
 
 def MAG_GRE(a):
@@ -16,8 +16,10 @@ def MAG_GRE(a):
 def SLR(a):
     sub_name = (a.q or input("Sub name: ")).strip()
     SLR_H(sub_name, DOWNLOAD_PATH, "info") if not a.noharvest else None
-    SLR_D(sub_name, DOWNLOAD_PATH, "info") if a.download else None
-    # SLR_DUPY(DOWNLOAD_PATH)
+    SLR_D(
+        sub_name, DOWNLOAD_PATH, a.randomize, a.refresh, "info"
+    ) if a.download else None
+    SLR_DUPY(DOWNLOAD_PATH)
 
 
 def argument_owner():
@@ -39,6 +41,18 @@ def argument_owner():
     )
     a.add_argument(
         "-nh", "--noharvest", help="Do not need to harvest?", action="store_true"
+    )
+    a.add_argument(
+        "-ru",
+        "--randomize",
+        help="Randomize the cached ultimatum dictionary?",
+        action="store_true",
+    )
+    a.add_argument(
+        "-f5",
+        "--refresh",
+        help="Refresh all the downloaded-flag in the cached dictionary",
+        action="store_true",
     )
     a.add_argument(
         "-dp",

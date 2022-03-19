@@ -1,7 +1,9 @@
+import random
+from json import dumps
 from threading import BoundedSemaphore, Thread
+import threading
 from time import time
 from typing import List, Optional
-from json import dumps
 
 from pyrhd.downloader.dler import BaseDownloader
 from pyrhd.utility.cprint import aprint, deleteLines, printInfo
@@ -15,8 +17,11 @@ class Downloader(BaseDownloader):
         self,
         sub_name: str,
         download_path: str,
+        randomize: bool = False,
+        refresh: bool = False,
         verbose: Optional[str] = "min",
     ):
+        self.randomize = randomize
         start_time = time()
         if verbose == "info":
             aprint("\n>>>", CA, "Downloader\n", CB)
@@ -28,6 +33,9 @@ class Downloader(BaseDownloader):
         ultimatum_path = f"{download_path}\\{BASE_PATH}\\{sub_name}\\{sub_name}.json"
         UTL.os.makedirs(self.download_path)
         super().__init__(ultimatum_path, SAVING_INTERVAL)
+
+        if refresh:
+            self.refreshDownloads()
         self.download()
         self.quitSaver()
 
@@ -40,15 +48,28 @@ class Downloader(BaseDownloader):
     def download(self):
         self.sema4 = BoundedSemaphore(CONF["thread"]["download"])
         self.thr: List[Thread] = []
+        self.al_thr: List[Thread] = []
         self.downloadAlbums()
         self.downloadPicsVids()
         # deleteLines(2)
+        UTL.threading.joinThreads(self.al_thr)
         UTL.threading.joinThreads(self.thr)
         self.saveUltimatum()
         self.printVerbose(2)
 
     def downloadAlbums(self):
-        for album_url, album_info in self.ultimatum["albums"].items():
+        gen_item = self.ultimatum["albums"].items()
+        al_sema4 = BoundedSemaphore(CONF["thread"]["album"])
+        if self.randomize:
+
+            def tmp_fun():
+                r = list(self.ultimatum["albums"])
+                random.shuffle(r)
+                for i in r:
+                    yield i, self.ultimatum["albums"][i]
+
+            gen_item = tmp_fun()
+        for album_url, album_info in gen_item:
             media_set = set(album_info["mediaUrls"] if album_info["mediaUrls"] else [])
             downloaded_set = set(
                 album_info["downloaded"] if album_info["downloaded"] else []
@@ -56,21 +77,43 @@ class Downloader(BaseDownloader):
             diff_list = media_set - downloaded_set
             if diff_list == set():
                 continue
-            args = [[album_url, album_info, diff_list], self.thr]
+            al_sema4.acquire()
+            args = [[album_url, album_info, diff_list, al_sema4], self.thr]
             UTL.threading.createThread(self.downloadAnAlbum, *args)
 
-    def downloadAnAlbum(self, album_url: str, album_info: dict, diff_list: set):
+    def downloadAnAlbum(
+        self,
+        album_url: str,
+        album_info: dict,
+        diff_list: set,
+        al_sema4: BoundedSemaphore,
+    ):
         sub_folder = album_info["title"].replace(".", "")[:40].strip()
         __path = f"{self.download_path}\\{sub_folder}"
         UTL.os.makedir(__path)
         for media_url in diff_list:
             self.sema4.acquire()
-            if self.downloadMedia(media_url, __path, None, self.sema4, None):
-                self.ultimatum["albums"][album_url]["downloaded"].append(media_url)
+            args = [[album_url, media_url, __path], self.al_thr]
+            UTL.threading.createThread(self.downloadAlMed, *args)
+        al_sema4.release()
+
+    def downloadAlMed(self, album_url, media_url, __path):
+        if self.downloadMedia(media_url, __path, None, None):
+            self.ultimatum["albums"][album_url]["downloaded"].append(media_url)
 
     def downloadPicsVids(self):
         u_media = self.ultimatum["medias"]
-        for parent_url, media_info in u_media.items():
+        gen_item = u_media.items()
+        if self.randomize:
+
+            def tmp_fun():
+                r = list(u_media)
+                random.shuffle(r)
+                for i in r:
+                    yield i, u_media[i]
+
+            gen_item = tmp_fun()
+        for parent_url, media_info in gen_item:
             if u_media[parent_url]["downloaded"]:
                 continue
             self.sema4.acquire()
@@ -81,7 +124,7 @@ class Downloader(BaseDownloader):
         title = media_info["title"]
         _id = parent_url.split("-")[-1].strip()
         media_url = media_info["mediaUrl"]
-        if self.downloadMedia(media_url, self.download_path, title, self.sema4, _id):
+        if self.downloadMedia(media_url, self.download_path, title, _id):
             self.ultimatum["medias"][parent_url]["downloaded"] = True
 
     def downloadMedia(
@@ -89,23 +132,29 @@ class Downloader(BaseDownloader):
         media_url: str,
         media_path: str,
         title: str,
-        sema4: BoundedSemaphore,
         _id: str = None,
     ) -> bool:
-        url_filename, ex10sion = media_url.split("/")[-1].split(".")
-        ex10sion = ex10sion.split("?")[0] if "?" in ex10sion else ex10sion
-        if title:
-            title = title.replace(".", "")[:40]
-            title = fr"{title}-{_id}.{ex10sion}"
-        else:
-            url_filename = url_filename.replace(".", "")[:40]
-            title = fr"{url_filename}.{ex10sion}"
-        if self.downloadAMedia(media_url, media_path, title, sema4, True, False):
-            # deleteLines(2)
-            # aprint("✅ Downloaded video from", CS, media_url, CU)
-            self.printVerbose(1)
-            return True
-        return False
+        status = False
+        try:
+            url_filename, ex10sion = media_url.split("/")[-1].split(".")
+            ex10sion = ex10sion.split("?")[0] if "?" in ex10sion else ex10sion
+            if title:
+                title = title.replace(".", "")[:40]
+                title = fr"{title}-{_id}.{ex10sion}"
+            else:
+                if _id == None:
+                    _id = url_filename.split("-")[-1]
+                url_filename = url_filename.replace(".", "")[:40]
+                title = fr"{url_filename}-{_id}.{ex10sion}"
+            if self.downloadAMedia(media_url, media_path, title, None, True, False):
+                # deleteLines(2)
+                # aprint("✅ Downloaded video from", CS, media_url, CU)
+                self.printVerbose(1)
+                status = True
+        except:
+            printInfo(*TMP_E, "Error in the function: Downloader.downloadMedia")
+        self.sema4.release()
+        return status
 
     def getCount(self, mode: str) -> int:
         c = 0
@@ -132,8 +181,9 @@ class Downloader(BaseDownloader):
             fmed = self.getCount("med")
             falb = self.getCount("alb")
             tmp_s = [*TMP_I, fmed, CT, "/", CN, tmed, CT, "medias and", CN]
-            tmp_s += [falb, CT, "/", CN, talb, CT]
-            printInfo(*tmp_s, "albums has been downloaded", CN, same_line=True)
+            tmp_s += [falb, CT, "/", CN, talb, CT, "albums has been downloaded", CN]
+            tmp_s += ["[threadCount:", CN, threading.activeCount(), CT, "]", CN]
+            printInfo(*tmp_s, same_line=True)
         if stage == 2:
             tmed = len(self.ultimatum["medias"])
             talb = len(self.ultimatum["albums"])
@@ -145,11 +195,10 @@ class Downloader(BaseDownloader):
             printInfo(*TMP_I, *tmp_s, "albums has been downloaded", CN)
 
     def refreshDownloads(self):
-        # for s_name, section in self.ultimatum.items():
-        #     for c_name, chapter in section["chapters"].items():
-        #         for l_url, lecture in chapter.items():
-        #             pointer = self.ultimatum[s_name]["chapters"][c_name][l_url]
-        #             pointer["dl"] = False
+        for album_name in self.ultimatum["albums"]:
+            self.ultimatum["albums"][album_name]["downloaded"] = []
+        for media_name in self.ultimatum["medias"]:
+            self.ultimatum["medias"][media_name]["downloaded"] = False
 
         self.saveUltimatum()
         printInfo(*TMP_I, "All downloaded status got flushed in the json file", CN)

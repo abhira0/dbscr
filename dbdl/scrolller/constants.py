@@ -8,7 +8,7 @@ BATCH_PATH = "scrolller\\download.bat"
 
 SAVING_INTERVAL = 10
 CONF = {
-    "thread": {"media": 30, "album": 30, "download": 30},
+    "thread": {"media": 50, "album": 50, "download": 50},
     "reset": {"query": 500},
     "stop": 100000,
 }
